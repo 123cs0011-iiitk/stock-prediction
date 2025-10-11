@@ -1,3 +1,3 @@
-from .ml_models import StockPredictor, ARIMAPredictor
+from .ml_models import EnsembleStockPredictor, ARIMATimeSeriesPredictor
 
-__all__ = ['StockPredictor', 'ARIMAPredictor']
+__all__ = ['EnsembleStockPredictor', 'ARIMATimeSeriesPredictor']

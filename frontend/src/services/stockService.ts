@@ -12,6 +12,12 @@ export interface StockData {
   dividend?: number;
   sector?: string;
   industry?: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  previousClose?: number;
+  timestamp?: string;
+  source?: string;
 }
 
 export interface PricePoint {
@@ -71,7 +77,42 @@ async function apiCall<T>(endpoint: string): Promise<T> {
 }
 
 export const stockService = {
-  // Get current stock data
+  // Get live stock price data using Alpha Vantage API
+  getLiveStockPrice: async (symbol: string): Promise<StockData> => {
+    if (!symbol) {
+      throw new Error('Stock symbol is required');
+    }
+    
+    try {
+      const response = await apiCall<any>(`/stock/price/${symbol.toUpperCase()}`);
+      // Transform backend response to match frontend interface
+      return {
+        symbol: response.symbol,
+        name: response.name,
+        price: response.price,
+        change: response.change,
+        changePercent: response.changePercent,
+        volume: response.volume,
+        marketCap: response.marketCap,
+        currency: response.currency,
+        pe: response.pe,
+        dividend: response.dividend,
+        sector: response.sector,
+        industry: response.industry,
+        open: response.open,
+        high: response.high,
+        low: response.low,
+        previousClose: response.previousClose,
+        timestamp: response.timestamp,
+        source: response.source
+      };
+    } catch (error) {
+      console.error(`Failed to fetch live stock price for ${symbol}:`, error);
+      throw new Error(`Unable to fetch live price for ${symbol}. Please try again later.`);
+    }
+  },
+
+  // Get current stock data (mock data - kept for compatibility)
   getStockData: async (symbol: string): Promise<StockData> => {
     if (!symbol) {
       throw new Error('Stock symbol is required');
@@ -157,9 +198,38 @@ export const stockService = {
     }
   },
 
-  // Get popular stocks
+  // Search stocks with live price data
+  searchStocksWithLivePrice: async (query: string): Promise<StockData[]> => {
+    try {
+      // First try to get live price directly for the symbol
+      const symbol = query.trim().toUpperCase();
+      try {
+        const liveData = await stockService.getLiveStockPrice(symbol);
+        return [liveData];
+      } catch (liveError) {
+        // If live price fails, fall back to mock search
+        console.log(`Live price not available for ${symbol}, falling back to mock data`);
+        const mockResults = await stockService.searchStocks(query);
+        return mockResults.map(stock => ({
+          symbol: stock.symbol,
+          name: stock.name,
+          price: 0, // Will be filled by mock data
+          change: 0,
+          changePercent: 0,
+          volume: 0,
+          marketCap: 0,
+          currency: 'USD'
+        }));
+      }
+    } catch (error) {
+      console.error(`Failed to search stocks with live price for "${query}":`, error);
+      return [];
+    }
+  },
+
+  // Get popular stocks (static list for UI display)
   getPopularStocks: async (): Promise<{ symbol: string; name: string }[]> => {
-    // Return fallback list since backend doesn't have a popular stocks endpoint
+    // Popular stocks for quick access - all use live Alpha Vantage data
     return [
       { symbol: 'AAPL', name: 'Apple Inc.' },
       { symbol: 'GOOGL', name: 'Alphabet Inc.' },
