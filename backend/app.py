@@ -6,8 +6,9 @@ from datetime import datetime, timedelta
 import json
 import os
 from dotenv import load_dotenv
-import random
-from models.ml_models import StockPredictor, ARIMAPredictor
+# Removed random import - no longer needed without mock data
+from models.ml_models import EnsembleStockPredictor, ARIMATimeSeriesPredictor
+from services.alpha_vantage import alpha_vantage
 
 # Load environment variables
 load_dotenv()
@@ -20,69 +21,9 @@ stock_cache = {}
 cache_duration = 300  # 5 minutes
 
 # ML Models for stock prediction
-ml_predictor = StockPredictor()
-arima_predictor = ARIMAPredictor()
-ml_models_trained = {}
-
-# Mock stock database for demonstration
-MOCK_STOCKS = {
-    'AAPL': {
-        'name': 'Apple Inc.',
-        'sector': 'Technology',
-        'industry': 'Consumer Electronics',
-        'base_price': 150.0,
-        'volatility': 0.02
-    },
-    'GOOGL': {
-        'name': 'Alphabet Inc.',
-        'sector': 'Technology',
-        'industry': 'Internet Services',
-        'base_price': 2800.0,
-        'volatility': 0.025
-    },
-    'MSFT': {
-        'name': 'Microsoft Corporation',
-        'sector': 'Technology',
-        'industry': 'Software',
-        'base_price': 300.0,
-        'volatility': 0.018
-    },
-    'TSLA': {
-        'name': 'Tesla Inc.',
-        'sector': 'Automotive',
-        'industry': 'Electric Vehicles',
-        'base_price': 800.0,
-        'volatility': 0.04
-    },
-    'AMZN': {
-        'name': 'Amazon.com Inc.',
-        'sector': 'Consumer Discretionary',
-        'industry': 'E-commerce',
-        'base_price': 3200.0,
-        'volatility': 0.03
-    },
-    'NVDA': {
-        'name': 'NVIDIA Corporation',
-        'sector': 'Technology',
-        'industry': 'Semiconductors',
-        'base_price': 500.0,
-        'volatility': 0.035
-    },
-    'META': {
-        'name': 'Meta Platforms Inc.',
-        'sector': 'Technology',
-        'industry': 'Social Media',
-        'base_price': 350.0,
-        'volatility': 0.03
-    },
-    'NFLX': {
-        'name': 'Netflix Inc.',
-        'sector': 'Communication Services',
-        'industry': 'Streaming',
-        'base_price': 450.0,
-        'volatility': 0.04
-    }
-}
+ensemble_predictor = EnsembleStockPredictor()
+arima_predictor = ARIMATimeSeriesPredictor(order=(1, 1, 1))
+trained_symbols = {}  # Track which symbols have trained models
 
 def get_cached_data(symbol):
     """Get cached stock data if it's still valid"""
@@ -96,97 +37,30 @@ def set_cached_data(symbol, data):
     """Cache stock data with timestamp"""
     stock_cache[symbol] = (datetime.now(), data)
 
-def generate_mock_price(base_price, volatility, days_back=0):
-    """Generate realistic mock price data"""
-    # Add some randomness based on days back
-    time_factor = 1 + (days_back * 0.001)
-    random_factor = random.uniform(0.95, 1.05)
-    volatility_factor = random.uniform(1 - volatility, 1 + volatility)
-    
-    return round(base_price * time_factor * random_factor * volatility_factor, 2)
-
-def generate_mock_historical_data(symbol, days=365):
-    """Generate mock historical data for a stock"""
-    if symbol not in MOCK_STOCKS:
+def get_historical_data_from_alpha_vantage(symbol, outputsize='compact'):
+    """Get historical data from Alpha Vantage API"""
+    try:
+        # Get daily time series data
+        historical_data = alpha_vantage.get_daily_time_series(symbol, outputsize)
+        
+        if not historical_data or 'historical_data' not in historical_data:
+            return None
+        
+        # Process the data
+        processed_data = {
+            'dates': [day['date'] for day in historical_data['historical_data']],
+            'prices': [day['close'] for day in historical_data['historical_data']],
+            'volumes': [day['volume'] for day in historical_data['historical_data']],
+            'opens': [day['open'] for day in historical_data['historical_data']],
+            'highs': [day['high'] for day in historical_data['historical_data']],
+            'lows': [day['low'] for day in historical_data['historical_data']]
+        }
+        
+        return processed_data
+        
+    except Exception as e:
+        print(f"Error fetching historical data for {symbol}: {e}")
         return None
-    
-    stock_info = MOCK_STOCKS[symbol]
-    base_price = stock_info['base_price']
-    volatility = stock_info['volatility']
-    
-    dates = []
-    prices = []
-    volumes = []
-    sma_20 = []
-    sma_50 = []
-    rsi_values = []
-    
-    current_price = base_price
-    
-    for i in range(days, 0, -1):
-        # Generate date
-        date = datetime.now() - timedelta(days=i)
-        dates.append(date.strftime('%Y-%m-%d'))
-        
-        # Generate price with realistic movement
-        price = generate_mock_price(base_price, volatility, i)
-        prices.append(price)
-        current_price = price
-        
-        # Generate volume (correlated with price movement)
-        volume = random.randint(1000000, 10000000)
-        volumes.append(volume)
-        
-        # Calculate moving averages (simplified)
-        if len(prices) >= 20:
-            sma_20.append(round(sum(prices[-20:]) / 20, 2))
-        else:
-            sma_20.append(price)
-            
-        if len(prices) >= 50:
-            sma_50.append(round(sum(prices[-50:]) / 50, 2))
-        else:
-            sma_50.append(price)
-        
-        # Generate RSI (simplified)
-        rsi = random.uniform(30, 70)
-        rsi_values.append(round(rsi, 1))
-    
-    return {
-        'dates': dates,
-        'prices': prices,
-        'volumes': volumes,
-        'sma_20': sma_20,
-        'sma_50': sma_50,
-        'rsi': rsi_values
-    }
-
-def get_mock_stock_info(symbol):
-    """Get mock stock information"""
-    if symbol not in MOCK_STOCKS:
-        return None
-    
-    stock_info = MOCK_STOCKS[symbol]
-    base_price = stock_info['base_price']
-    
-    # Generate current price with some variation
-    current_price = generate_mock_price(base_price, stock_info['volatility'])
-    price_change = random.uniform(-base_price * 0.1, base_price * 0.1)
-    change_percent = (price_change / current_price) * 100
-    
-    return {
-        'name': stock_info['name'],
-        'price': current_price,
-        'change': round(price_change, 2),
-        'changePercent': round(change_percent, 2),
-        'volume': random.randint(1000000, 50000000),
-        'marketCap': base_price * random.randint(1000000, 10000000),
-        'currency': 'USD',
-        'pe': round(random.uniform(15, 35), 1),
-        'dividend': round(random.uniform(0, 3), 2),
-        'sector': stock_info['sector'],
-        'industry': stock_info['industry']
-    }
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -199,39 +73,126 @@ def health_check():
 
 @app.route('/api/search', methods=['GET'])
 def search_stocks():
-    """Search for stocks by symbol or company name"""
+    """Search for stocks by symbol - uses live price endpoint"""
     query = request.args.get('q', '').strip().upper()
     
     if not query:
         return jsonify({'error': 'Query parameter required'}), 400
     
-    # Check if stock exists in our mock database
-    if query not in MOCK_STOCKS:
-        return jsonify({'error': 'Stock not found'}), 404
-    
     try:
-        # Get mock stock info
-        stock_info = get_mock_stock_info(query)
+        # Get live stock price data
+        quote_data = alpha_vantage.get_global_quote(query)
+        
+        # Try to get company overview for additional info
+        try:
+            company_data = alpha_vantage.get_company_overview(query)
+            company_name = company_data.get('name', f'{query} Corporation')
+        except:
+            company_name = f'{query} Corporation'
         
         result = {
-            'symbol': query,
-            'name': stock_info['name'],
-            'price': stock_info['price'],
-            'change': stock_info['change'],
-            'changePercent': stock_info['changePercent'],
-            'volume': stock_info['volume'],
-            'marketCap': stock_info['marketCap'],
-            'currency': stock_info['currency']
+            'symbol': quote_data['symbol'],
+            'name': company_name,
+            'price': quote_data['price'],
+            'change': quote_data['change'],
+            'changePercent': float(quote_data['change_percent']),
+            'volume': quote_data['volume'],
+            'currency': 'USD'
         }
         
         return jsonify(result)
     
     except Exception as e:
-        return jsonify({'error': f'Error searching stock: {str(e)}'}), 500
+        error_msg = str(e)
+        if 'Rate limit' in error_msg or 'API limit' in error_msg:
+            return jsonify({
+                'error': 'API rate limit exceeded. Please try again in a few minutes.',
+                'details': error_msg
+            }), 429
+        elif 'No data found' in error_msg or 'No price data' in error_msg:
+            return jsonify({
+                'error': f'Stock symbol "{query}" not found or no data available'
+            }), 404
+        else:
+            return jsonify({'error': f'Error searching stock: {str(e)}'}), 500
+
+@app.route('/api/stock/price/<symbol>', methods=['GET'])
+def get_live_stock_price(symbol):
+    """Get real-time stock price using Alpha Vantage API"""
+    symbol = symbol.upper().strip()
+    
+    if not symbol:
+        return jsonify({'error': 'Stock symbol is required'}), 400
+    
+    try:
+        # Get real-time quote from Alpha Vantage
+        quote_data = alpha_vantage.get_global_quote(symbol)
+        
+        # Try to get company overview for additional info
+        try:
+            company_data = alpha_vantage.get_company_overview(symbol)
+            company_name = company_data.get('name', f'{symbol} Corporation')
+            market_cap = company_data.get('market_cap', 'N/A')
+            sector = company_data.get('sector', 'N/A')
+            industry = company_data.get('industry', 'N/A')
+        except:
+            # Fallback to default values if company overview fails
+            company_name = f'{symbol} Corporation'
+            market_cap = 'N/A'
+            sector = 'N/A'
+            industry = 'N/A'
+        
+        # Format response
+        response = {
+            'symbol': quote_data['symbol'],
+            'name': company_name,
+            'price': quote_data['price'],
+            'change': quote_data['change'],
+            'changePercent': float(quote_data['change_percent']),
+            'volume': quote_data['volume'],
+            'high': quote_data['high'],
+            'low': quote_data['low'],
+            'open': quote_data['open'],
+            'previousClose': quote_data['previous_close'],
+            'marketCap': market_cap,
+            'sector': sector,
+            'industry': industry,
+            'currency': 'USD',
+            'timestamp': quote_data['timestamp'],
+            'source': 'Alpha Vantage'
+        }
+        
+        return jsonify(response)
+        
+    except ValueError as e:
+        # Handle API errors (rate limits, invalid symbols, etc.)
+        error_msg = str(e)
+        if 'Rate limit' in error_msg or 'API limit' in error_msg:
+            return jsonify({
+                'error': 'API rate limit exceeded. Please try again in a few minutes.',
+                'details': error_msg,
+                'retry_after': 300  # 5 minutes
+            }), 429
+        elif 'No data found' in error_msg or 'No price data' in error_msg:
+            return jsonify({
+                'error': f'Stock symbol "{symbol}" not found or no data available',
+                'details': error_msg
+            }), 404
+        else:
+            return jsonify({
+                'error': 'Failed to fetch stock data',
+                'details': error_msg
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal server error while fetching stock data',
+            'details': str(e)
+        }), 500
 
 @app.route('/api/stock/<symbol>', methods=['GET'])
 def get_stock_data(symbol):
-    """Get detailed stock data and historical prices"""
+    """Get detailed stock data and historical prices from Alpha Vantage"""
     symbol = symbol.upper()
     
     # Check cache first
@@ -239,23 +200,67 @@ def get_stock_data(symbol):
     if cached_data:
         return jsonify(cached_data)
     
-    # Check if stock exists in our mock database
-    if symbol not in MOCK_STOCKS:
-        return jsonify({'error': 'Stock not found'}), 404
-    
     try:
-        # Get mock stock info
-        stock_info = get_mock_stock_info(symbol)
+        # Get live stock price data
+        quote_data = alpha_vantage.get_global_quote(symbol)
         
-        # Generate mock historical data
-        historical_data = generate_mock_historical_data(symbol)
+        # Try to get company overview
+        try:
+            company_data = alpha_vantage.get_company_overview(symbol)
+            company_name = company_data.get('name', f'{symbol} Corporation')
+            market_cap = company_data.get('market_cap', 'N/A')
+            sector = company_data.get('sector', 'N/A')
+            industry = company_data.get('industry', 'N/A')
+        except:
+            company_name = f'{symbol} Corporation'
+            market_cap = 'N/A'
+            sector = 'N/A'
+            industry = 'N/A'
+        
+        # Get historical data
+        historical_data = get_historical_data_from_alpha_vantage(symbol)
         
         if not historical_data:
-            return jsonify({'error': 'Unable to generate historical data'}), 500
+            return jsonify({'error': 'Unable to fetch historical data'}), 500
         
-        # Calculate technical indicators from mock data
+        # Calculate technical indicators from real data
         prices = historical_data['prices']
-        volatility = np.std(np.diff(prices) / prices[:-1]) * np.sqrt(252) * 100 if len(prices) > 1 else 20.0
+        if len(prices) > 1:
+            volatility = np.std(np.diff(prices) / prices[:-1]) * np.sqrt(252) * 100
+        else:
+            volatility = 20.0
+        
+        # Calculate moving averages
+        sma_20 = np.mean(prices[-20:]) if len(prices) >= 20 else prices[-1]
+        sma_50 = np.mean(prices[-50:]) if len(prices) >= 50 else prices[-1]
+        
+        # Calculate RSI (simplified)
+        if len(prices) >= 14:
+            price_changes = np.diff(prices[-14:])
+            gains = np.where(price_changes > 0, price_changes, 0)
+            losses = np.where(price_changes < 0, -price_changes, 0)
+            avg_gain = np.mean(gains)
+            avg_loss = np.mean(losses)
+            if avg_loss != 0:
+                rs = avg_gain / avg_loss
+                rsi = 100 - (100 / (1 + rs))
+            else:
+                rsi = 100
+        else:
+            rsi = 50
+        
+        # Prepare stock info
+        stock_info = {
+            'name': company_name,
+            'price': quote_data['price'],
+            'change': quote_data['change'],
+            'changePercent': float(quote_data['change_percent']),
+            'volume': quote_data['volume'],
+            'marketCap': market_cap,
+            'currency': 'USD',
+            'sector': sector,
+            'industry': industry
+        }
         
         # Prepare data for frontend
         stock_data = {
@@ -263,11 +268,12 @@ def get_stock_data(symbol):
             'info': stock_info,
             'historical': historical_data,
             'technical': {
-                'sma_20': historical_data['sma_20'][-1] if historical_data['sma_20'] else None,
-                'sma_50': historical_data['sma_50'][-1] if historical_data['sma_50'] else None,
-                'rsi': historical_data['rsi'][-1] if historical_data['rsi'] else None,
+                'sma_20': round(sma_20, 2),
+                'sma_50': round(sma_50, 2),
+                'rsi': round(rsi, 1),
                 'volatility': round(volatility, 1)
-            }
+            },
+            'source': 'Alpha Vantage'
         }
         
         # Cache the data
@@ -280,93 +286,124 @@ def get_stock_data(symbol):
 
 @app.route('/api/predict/<symbol>', methods=['GET'])
 def predict_stock(symbol):
-    """Get stock price prediction using ML models and technical analysis"""
+    """Get stock price prediction using ML models with real Alpha Vantage data"""
     symbol = symbol.upper()
     
-    # Check if stock exists in our mock database
-    if symbol not in MOCK_STOCKS:
-        return jsonify({'error': 'Stock not found'}), 404
-    
     try:
-        # Get mock stock info
-        stock_info = get_mock_stock_info(symbol)
-        current_price = stock_info['price']
+        # Get live stock price data
+        quote_data = alpha_vantage.get_global_quote(symbol)
+        current_price = quote_data['price']
         
-        # Generate mock historical data for prediction
-        historical_data = generate_mock_historical_data(symbol, days=100)
+        # Get historical data for ML training
+        historical_data = get_historical_data_from_alpha_vantage(symbol, outputsize='compact')
         
         if not historical_data:
-            return jsonify({'error': 'Unable to generate historical data'}), 500
+            return jsonify({'error': 'Unable to fetch historical data for ML training'}), 500
         
         # Extract prices and volume for ML models
         prices = historical_data['prices']
-        volume = historical_data.get('volume', [random.randint(1000000, 10000000) for _ in range(len(prices))])
+        volumes = historical_data['volumes']
         
-        # Train ML models if not already trained for this symbol
-        if symbol not in ml_models_trained:
-            # Train StockPredictor
-            success, message = ml_predictor.train_models(prices, volume)
-            if success:
-                ml_models_trained[symbol] = True
+        # Train ensemble models if not already trained for this symbol
+        if symbol not in trained_symbols:
+            print(f"Training ML models for {symbol}...")
+            
+            # Train Ensemble Stock Predictor
+            ensemble_success, ensemble_message = ensemble_predictor.train_ensemble_models(prices, volumes)
+            if ensemble_success:
+                trained_symbols[symbol] = {
+                    'ensemble_trained': True,
+                    'ensemble_message': ensemble_message
+                }
             else:
-                print(f"ML training failed for {symbol}: {message}")
-        
-        # Train ARIMA model
-        arima_success, arima_message = arima_predictor.train(prices)
+                print(f"Ensemble training failed for {symbol}: {ensemble_message}")
+                trained_symbols[symbol] = {
+                    'ensemble_trained': False,
+                    'ensemble_message': ensemble_message
+                }
+            
+            # Train ARIMA model
+            arima_success, arima_message = arima_predictor.train_arima_model(prices)
+            if arima_success:
+                trained_symbols[symbol]['arima_trained'] = True
+                trained_symbols[symbol]['arima_message'] = arima_message
+            else:
+                print(f"ARIMA training failed for {symbol}: {arima_message}")
+                trained_symbols[symbol]['arima_trained'] = False
+                trained_symbols[symbol]['arima_message'] = arima_message
         
         # Get ML predictions
-        ml_prediction = None
-        if symbol in ml_models_trained:
-            ml_prediction, ml_error = ml_predictor.predict_next_day(prices, volume)
+        ensemble_prediction = None
+        if trained_symbols[symbol]['ensemble_trained']:
+            ensemble_prediction, ensemble_error = ensemble_predictor.predict_next_day_price(prices, volumes)
+            if ensemble_error:
+                print(f"Ensemble prediction error for {symbol}: {ensemble_error}")
         
         # Get ARIMA predictions
         arima_prediction = None
-        if arima_success:
-            arima_prediction, arima_error = arima_predictor.predict(prices, steps=5)
+        if trained_symbols[symbol]['arima_trained']:
+            arima_prediction, arima_error = arima_predictor.predict_time_series(prices, steps=5)
+            if arima_error:
+                print(f"ARIMA prediction error for {symbol}: {arima_error}")
         
-        # Calculate technical indicators
-        sma_20 = sum(prices[-20:]) / 20 if len(prices) >= 20 else current_price
-        sma_50 = sum(prices[-50:]) / 50 if len(prices) >= 50 else current_price
+        # Calculate technical indicators from real data
+        sma_20 = np.mean(prices[-20:]) if len(prices) >= 20 else current_price
+        sma_50 = np.mean(prices[-50:]) if len(prices) >= 50 else current_price
         
-        # Calculate trend based on ML predictions if available
-        if ml_prediction:
-            ensemble_pred = ml_prediction['ensemble']
-            trend_change = (ensemble_pred - current_price) / current_price
-            if trend_change > 0.01:
+        # Calculate trend based on ensemble predictions
+        if ensemble_prediction:
+            final_pred = ensemble_prediction['ensemble_prediction']['final_prediction']
+            confidence = ensemble_prediction['ensemble_prediction']['confidence']
+            trend_change = (final_pred - current_price) / current_price
+            
+            if trend_change > 0.02:
                 trend = 'bullish'
-                confidence = min(ml_prediction['confidence'], 90)
-            elif trend_change < -0.01:
+            elif trend_change < -0.02:
                 trend = 'bearish'
-                confidence = min(ml_prediction['confidence'], 90)
             else:
                 trend = 'neutral'
-                confidence = ml_prediction['confidence']
         else:
             # Fallback to simple trend analysis
-            recent_trend = random.uniform(-0.02, 0.02)
-            if sma_20 > sma_50 and recent_trend > 0:
+            if len(prices) >= 20:
+                recent_trend = (prices[-1] - prices[-20]) / prices[-20]
+            else:
+                recent_trend = 0
+            
+            if recent_trend > 0.01 and sma_20 > sma_50:
                 trend = 'bullish'
-                confidence = min(70 + (recent_trend * 1000), 85)
-            elif sma_20 < sma_50 and recent_trend < 0:
+                confidence = 65
+            elif recent_trend < -0.01 and sma_20 < sma_50:
                 trend = 'bearish'
-                confidence = min(70 + abs(recent_trend * 1000), 85)
+                confidence = 65
             else:
                 trend = 'neutral'
                 confidence = 50
         
-        # Calculate support and resistance levels
-        support = current_price * random.uniform(0.85, 0.95)
-        resistance = current_price * random.uniform(1.05, 1.15)
+        # Calculate support and resistance levels based on historical data
+        if len(prices) >= 20:
+            recent_lows = min(prices[-20:])
+            recent_highs = max(prices[-20:])
+            support = recent_lows * 0.98  # 2% below recent low
+            resistance = recent_highs * 1.02  # 2% above recent high
+        else:
+            support = current_price * 0.95
+            resistance = current_price * 1.05
         
-        # Calculate next day range
-        volatility = MOCK_STOCKS[symbol]['volatility']
-        next_day_low = current_price * (1 - volatility)
-        next_day_high = current_price * (1 + volatility)
+        # Calculate volatility and next day range
+        if len(prices) > 1:
+            daily_returns = np.diff(prices) / prices[:-1]
+            volatility = np.std(daily_returns) * np.sqrt(252) * 100
+        else:
+            volatility = 20
         
-        # Prepare prediction response
+        next_day_low = current_price * (1 - volatility/100)
+        next_day_high = current_price * (1 + volatility/100)
+        
+        # Prepare comprehensive prediction response
         prediction = {
             'symbol': symbol,
             'current_price': current_price,
+            'data_source': 'Alpha Vantage',
             'prediction': {
                 'trend': trend,
                 'confidence': round(confidence, 1),
@@ -380,13 +417,16 @@ def predict_stock(symbol):
             'technical_indicators': {
                 'sma_20': round(sma_20, 2),
                 'sma_50': round(sma_50, 2),
-                'trend_strength': round(abs(trend_change if ml_prediction else recent_trend * 100), 2)
+                'volatility': round(volatility, 1),
+                'trend_strength': round(abs(trend_change if ensemble_prediction else recent_trend * 100), 2)
             },
-            'ml_predictions': ml_prediction,
+            'ml_predictions': ensemble_prediction,
             'arima_predictions': arima_prediction,
             'model_status': {
-                'ml_models_trained': symbol in ml_models_trained,
-                'arima_trained': arima_success
+                'ensemble_trained': trained_symbols[symbol]['ensemble_trained'],
+                'arima_trained': trained_symbols[symbol]['arima_trained'],
+                'training_samples': len(prices),
+                'data_points_used': len(prices)
             }
         }
         
@@ -415,10 +455,10 @@ def analyze_portfolio():
             cost_basis = position['costBasis']
             
             try:
-                # Get mock current price
-                if symbol in MOCK_STOCKS:
-                    stock_info = get_mock_stock_info(symbol)
-                    current_price = stock_info['price']
+                # Get live current price from Alpha Vantage
+                try:
+                    quote_data = alpha_vantage.get_global_quote(symbol)
+                    current_price = quote_data['price']
                     
                     current_value = current_price * shares
                     total_value += current_value
@@ -434,10 +474,12 @@ def analyze_portfolio():
                         'currentPrice': current_price,
                         'currentValue': current_value,
                         'gainLoss': gain_loss,
-                        'gainLossPercent': gain_loss_percent
+                        'gainLossPercent': gain_loss_percent,
+                        'dataSource': 'Alpha Vantage'
                     })
-                else:
-                    # If stock not in mock database, use cost basis
+                except Exception as price_error:
+                    # If live price unavailable, use cost basis
+                    print(f"Could not get live price for {symbol}: {price_error}")
                     total_cost += cost_basis
                     positions.append({
                         'symbol': symbol,
@@ -446,11 +488,13 @@ def analyze_portfolio():
                         'currentPrice': 0,
                         'currentValue': cost_basis,
                         'gainLoss': 0,
-                        'gainLossPercent': 0
+                        'gainLossPercent': 0,
+                        'dataSource': 'Cost Basis (Live price unavailable)'
                     })
             
             except Exception as e:
                 # If we can't get current price, use cost basis
+                print(f"Error processing position for {symbol}: {e}")
                 total_cost += cost_basis
                 positions.append({
                     'symbol': symbol,
@@ -459,7 +503,8 @@ def analyze_portfolio():
                     'currentPrice': 0,
                     'currentValue': cost_basis,
                     'gainLoss': 0,
-                    'gainLossPercent': 0
+                    'gainLossPercent': 0,
+                    'dataSource': 'Cost Basis (Error fetching price)'
                 })
         
         portfolio_return = ((total_value - total_cost) / total_cost * 100) if total_cost > 0 else 0
@@ -488,13 +533,11 @@ def get_models_status():
     """Get status of ML models"""
     try:
         status = {
-            'ml_predictor': ml_predictor.get_model_info(),
-            'arima_predictor': {
-                'status': 'Trained' if arima_predictor.is_trained else 'Not trained',
-                'model_type': 'ARIMA'
-            },
-            'trained_symbols': list(ml_models_trained.keys()),
-            'total_symbols': len(ml_models_trained)
+            'ensemble_predictor': ensemble_predictor.get_ensemble_model_info(),
+            'arima_predictor': arima_predictor.get_arima_model_info(),
+            'trained_symbols': list(trained_symbols.keys()),
+            'total_symbols': len(trained_symbols),
+            'symbol_details': trained_symbols
         }
         return jsonify(status)
     except Exception as e:
@@ -502,39 +545,55 @@ def get_models_status():
 
 @app.route('/api/models/train/<symbol>', methods=['POST'])
 def train_models_for_symbol(symbol):
-    """Manually train ML models for a specific symbol"""
+    """Manually train ML models for a specific symbol using Alpha Vantage data"""
     symbol = symbol.upper()
     
-    if symbol not in MOCK_STOCKS:
-        return jsonify({'error': 'Stock not found'}), 404
-    
     try:
-        # Generate historical data
-        historical_data = generate_mock_historical_data(symbol, days=100)
+        # Get historical data from Alpha Vantage
+        historical_data = get_historical_data_from_alpha_vantage(symbol, outputsize='full')
         if not historical_data:
-            return jsonify({'error': 'Unable to generate historical data'}), 500
+            return jsonify({'error': 'Unable to fetch historical data for training'}), 500
         
         prices = historical_data['prices']
-        volume = historical_data.get('volume', [random.randint(1000000, 10000000) for _ in range(len(prices))])
+        volumes = historical_data['volumes']
         
-        # Train ML models
-        ml_success, ml_message = ml_predictor.train_models(prices, volume)
-        arima_success, arima_message = arima_predictor.train(prices)
+        if len(prices) < 100:
+            return jsonify({'error': f'Insufficient historical data for training (need at least 100 data points, got {len(prices)})'}), 400
         
-        if ml_success:
-            ml_models_trained[symbol] = True
+        # Train Ensemble models
+        ensemble_success, ensemble_message = ensemble_predictor.train_ensemble_models(prices, volumes)
+        
+        # Train ARIMA model
+        arima_success, arima_message = arima_predictor.train_arima_model(prices)
+        
+        # Update training status
+        trained_symbols[symbol] = {
+            'ensemble_trained': ensemble_success,
+            'ensemble_message': ensemble_message,
+            'arima_trained': arima_success,
+            'arima_message': arima_message,
+            'training_samples': len(prices),
+            'last_trained': datetime.now().isoformat()
+        }
         
         result = {
             'symbol': symbol,
-            'ml_training': {
-                'success': ml_success,
-                'message': ml_message
+            'data_source': 'Alpha Vantage',
+            'training_data': {
+                'samples': len(prices),
+                'date_range': f"{historical_data['dates'][-1]} to {historical_data['dates'][0]}"
+            },
+            'ensemble_training': {
+                'success': ensemble_success,
+                'message': ensemble_message,
+                'algorithm': 'Linear Regression + Random Forest Ensemble'
             },
             'arima_training': {
                 'success': arima_success,
-                'message': arima_message
+                'message': arima_message,
+                'algorithm': 'ARIMA Time Series'
             },
-            'models_trained': symbol in ml_models_trained
+            'models_ready': ensemble_success and arima_success
         }
         
         return jsonify(result)
@@ -542,18 +601,12 @@ def train_models_for_symbol(symbol):
     except Exception as e:
         return jsonify({'error': f'Error training models: {str(e)}'}), 500
 
-# TODO: Future API Integration
-# When you're ready to add real API keys, replace the mock functions above with:
-# 1. Uncomment yfinance import
-# 2. Replace get_mock_stock_info() calls with yf.Ticker(symbol).info
-# 3. Replace generate_mock_historical_data() calls with ticker.history()
-# 4. Add your API keys to .env file
-# 5. Update requirements.txt to include yfinance
+# Real-time stock data is now available via Alpha Vantage API
+# Use /api/stock/price/<symbol> endpoint for live prices
+# Set ALPHA_VANTAGE_API_KEY in your .env file
 
-def calculate_rsi(prices, period=14):
-    """Calculate Relative Strength Index (placeholder for future ML implementation)"""
-    # This will be implemented with real data in Phase 4
-    return [random.uniform(30, 70) for _ in range(len(prices))]
+# All ML algorithms and data processing now use real Alpha Vantage data
+# Mock data has been completely removed from the system
 
 @app.errorhandler(404)
 def not_found(error):

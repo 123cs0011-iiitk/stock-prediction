@@ -64,7 +64,14 @@ export default function App() {
     setLoading((prev) => ({ ...prev, stock: true }));
     setErrors((prev) => ({ ...prev, stock: "" }));
     try {
-      const data = await stockService.getStockData(symbol);
+      // Try to get live price first, fall back to mock data if needed
+      let data: StockData;
+      try {
+        data = await stockService.getLiveStockPrice(symbol);
+      } catch (liveError) {
+        console.log(`Live price not available for ${symbol}, using mock data`);
+        data = await stockService.getStockData(symbol);
+      }
       setStockData(data);
     } catch (error) {
       console.error("Failed to load stock data:", error);
@@ -224,41 +231,42 @@ export default function App() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              This stock prediction dashboard uses k-nearest
-              neighbor (KNN) machine learning algorithm to
-              analyze recent price patterns and predict
-              short-term price movements. The algorithm examines
-              the most recent trading data to identify similar
-              patterns and estimate future prices.
+              This stock prediction dashboard uses advanced machine learning algorithms
+              to analyze historical price patterns and predict future price movements.
+              The system combines Linear Regression, Random Forest Regressor, and ARIMA
+              time series models to provide comprehensive predictions with confidence scores.
             </p>
             <div className="text-xs text-muted-foreground space-y-1">
               <p>
-                <strong>Backend:</strong> Powered by Supabase
-                edge functions with real-time data processing
+                <strong>Backend:</strong> Flask API with real-time ML processing
+                and comprehensive error handling
               </p>
               <p>
-                <strong>Prediction Model:</strong> K-Nearest
-                Neighbor algorithm with weighted recent data
-                analysis
+                <strong>ML Algorithms:</strong> 
+                <br/>• Linear Regression (30% weight)
+                <br/>• Random Forest Regressor (70% weight) 
+                <br/>• ARIMA Time Series Model
+                <br/>• Ensemble Prediction Method
               </p>
               <p>
-                <strong>Timeframes:</strong> Weekly, monthly,
-                and yearly historical data analysis
+                <strong>Technical Indicators:</strong> RSI, SMA, Bollinger Bands,
+                momentum, volatility, and price-volume correlation
               </p>
               <p>
-                <strong>Caching:</strong> Smart caching for
-                performance - stock data (5 min), historical
-                data (1 hour), predictions (15 min)
+                <strong>Data Processing:</strong> Real-time feature engineering
+                with 20+ technical indicators from historical data
               </p>
               <p>
-                <strong>Currency Support:</strong> Real-time
-                conversion between USD and INR with live
-                formatting
+                <strong>Caching:</strong> Smart caching for performance - 
+                stock data (5 min), predictions cached per symbol
               </p>
               <p>
-                <strong>Future:</strong> Ready for Yahoo Finance
-                API integration with environment variable
-                configuration
+                <strong>Currency Support:</strong> Real-time conversion between 
+                USD and INR with live formatting
+              </p>
+              <p>
+                <strong>Data Source:</strong> Live stock data via Alpha Vantage API
+                with comprehensive error handling and rate limiting
               </p>
             </div>
           </CardContent>

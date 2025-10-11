@@ -67,5 +67,3 @@ coverage/
 .env.test.local
 .env.production.local
 
-# Cursor AI
-.cursor/
