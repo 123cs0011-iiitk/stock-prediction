@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from routes.stock_routes import router as stock_router
 from routes.prediction_routes import router as prediction_router
 from routes.health_routes import router as health_router
+from routes.ml_algorithms_routes import router as ml_algorithms_router
 from config.settings import get_settings
 
 # Configure logging
@@ -68,10 +69,11 @@ app = FastAPI(
     - Polygon.io
     
     ### ML Models:
-    - Linear Regression
-    - Random Forest Regressor
-    - ARIMA Time Series
-    - Ensemble Methods
+    - Classification: SVM, Decision Tree, Random Forest, Naive Bayes, K-NN
+    - Regression: Linear Regression, Logistic Regression, ARIMA
+    - Clustering: K-Means, t-SNE
+    - Neural Networks: ANN, CNN
+    - Other: Lazy Learning
     """,
     version="2.0.0",
     contact={
@@ -161,6 +163,12 @@ app.include_router(
     tags=["Predictions"]
 )
 
+app.include_router(
+    ml_algorithms_router,
+    prefix="/api/v1",
+    tags=["ML Algorithms"]
+)
+
 
 # Root endpoint
 @app.get("/", tags=["Root"])
@@ -177,6 +185,7 @@ async def root():
         "endpoints": {
             "stocks": "/api/v1/stocks",
             "predictions": "/api/v1/predictions",
+            "ml_algorithms": "/api/v1/algorithms",
             "health": "/api/v1/health"
         },
         "timestamp": datetime.utcnow().isoformat()
