@@ -1,165 +1,267 @@
-# Stock Prediction Pro
+# Backend Documentation - Stock Price Insight Arena
 
-An AI-powered stock prediction and analysis website built with HTML, CSS, and JavaScript. This project provides a modern, responsive interface for stock analysis and portfolio management.
+A comprehensive Python Flask backend providing real-time stock data analysis, machine learning predictions, and portfolio management through RESTful APIs.
 
 ## 🚀 Features
 
-### Current Phase (Phase 1 - Basic Structure)
-- ✅ **Modern, Responsive Design**: Mobile-first approach with beautiful gradients and animations
-- ✅ **Interactive Navigation**: Smooth scrolling and mobile-friendly hamburger menu
-- ✅ **Stock Search Interface**: Search for stocks by symbol with placeholder functionality
-- ✅ **Portfolio Management**: Add, remove, and track stocks in your portfolio
-- ✅ **Local Storage**: Portfolio data persists between sessions
-- ✅ **Notification System**: User-friendly feedback for all actions
-- ✅ **Loading States**: Professional loading animations and modals
+### Core Functionality
+- ✅ **Real-time Stock Data**: Alpha Vantage API integration for live market data
+- ✅ **Advanced ML Predictions**: Ensemble models with Linear Regression and Random Forest
+- ✅ **ARIMA Time Series**: AutoRegressive Integrated Moving Average forecasting
+- ✅ **Technical Analysis**: 25+ technical indicators (RSI, SMA, Bollinger Bands, etc.)
+- ✅ **Portfolio Management**: Real-time portfolio analysis and risk assessment
+- ✅ **RESTful APIs**: Comprehensive API endpoints for frontend integration
+- ✅ **Error Handling**: Robust error handling with API rate limiting
+- ✅ **Caching**: Smart caching system for improved performance
 
-### Upcoming Features (Future Phases)
-- 🔄 **Real-time Stock Data**: Integration with Yahoo Finance or Alpha Vantage APIs
-- 🔄 **Machine Learning Models**: LSTM, Random Forest, and ARIMA predictions
-- 🔄 **Interactive Charts**: Real-time price charts using Chart.js or D3.js
-- 🔄 **Advanced Analytics**: Technical indicators and sentiment analysis
-- 🔄 **Backend API**: Python Flask/FastAPI server with ML endpoints
+### ML Algorithms
+- ✅ **Ensemble Stock Predictor**: Combined Linear Regression (30%) and Random Forest (70%)
+- ✅ **ARIMA Time Series**: Multi-step forecasting with confidence scoring
+- ✅ **Feature Engineering**: Advanced technical indicator calculations
+- ✅ **Performance Metrics**: R² score, RMSE, MAE for model evaluation
 
 ## 🛠️ Technology Stack
 
-- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
-- **Styling**: Custom CSS with CSS Grid, Flexbox, and CSS Variables
-- **Icons**: Font Awesome 6.0
-- **Fonts**: Google Fonts (Inter)
-- **Responsive Design**: Mobile-first approach with CSS Grid and Flexbox
-- **Local Storage**: Browser localStorage for data persistence
+### Core Technologies
+- **Python 3.8+**: Core programming language
+- **Flask**: Web framework with CORS support
+- **scikit-learn**: Machine learning algorithms and tools
+- **pandas**: Data manipulation and analysis
+- **numpy**: Numerical computing
+- **requests**: HTTP client for API calls
 
-## 📁 Project Structure
+### ML Libraries
+- **scikit-learn**: Linear Regression, Random Forest, StandardScaler
+- **pandas**: Data preprocessing and feature engineering
+- **numpy**: Mathematical operations and array handling
+
+### External Services
+- **Alpha Vantage API**: Real-time stock data provider
+- **python-dotenv**: Environment variable management
+
+## 📁 Backend Project Structure
 
 ```
-stock_prediction/
-├── index.html          # Main HTML file
-├── css/
-│   └── styles.css      # Main stylesheet
-├── js/
-│   └── app.js          # Main JavaScript functionality
-├── data/               # Data storage (future use)
-├── models/             # ML models (future use)
-├── PROJECT_TODO.md     # Project implementation roadmap
-└── README.md           # This file
+backend/
+├── app.py                    # Main Flask application with API endpoints
+├── requirements.txt          # Python dependencies
+├── env.example              # Environment variables template
+├── models/                  # ML model implementations
+│   ├── __init__.py         # Package initialization
+│   └── ml_models.py        # Ensemble & ARIMA models
+├── services/               # External service integrations
+│   ├── __init__.py         # Package initialization
+│   └── alpha_vantage.py    # Alpha Vantage API client
+├── test_alpha_vantage.py   # Alpha Vantage integration tests
+├── test_api.py            # API endpoint tests
+├── test_ml_refactor.py    # ML model tests
+└── venv/                  # Python virtual environment
 ```
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Modern web browser (Chrome, Firefox, Safari, Edge)
-- No additional software installation required
+- **Python 3.8+** - Core runtime environment
+- **pip** - Python package manager
+- **Git** - Version control (optional)
+- **Alpha Vantage API Key** - Free account at [alphavantage.co](https://www.alphavantage.co/support/#api-key)
 
 ### Installation & Setup
 
-1. **Clone or Download** the project files to your local machine
-
-2. **Navigate** to the project directory:
+1. **Navigate to backend directory**:
    ```bash
-   cd stock_prediction
+   cd backend
    ```
 
-3. **Open** the website:
-   - **Option 1**: Double-click `index.html` to open in your default browser
-   - **Option 2**: Use a local server for better development experience:
-     ```bash
-     # Using Python 3
-     python3 -m http.server 8000
-     
-     # Using Node.js (if you have it installed)
-     npx http-server
-     
-     # Using PHP (if you have it installed)
-     php -S localhost:8000
-     ```
+2. **Create virtual environment**:
+   ```bash
+   py -m venv venv
+   venv\Scripts\activate  # Windows
+   # source venv/bin/activate  # macOS/Linux
+   ```
 
-4. **Access** the website:
-   - If using a local server: `http://localhost:8000`
-   - If opening directly: File path in your browser
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## 🎯 How to Use
+4. **Setup environment variables**:
+   ```bash
+   cp env.example .env
+   # Edit .env and add your ALPHA_VANTAGE_API_KEY
+   ```
 
-### Stock Search
-1. Enter a stock symbol (e.g., AAPL, GOOGL, MSFT) in the search bar
-2. Click "Predict" or press Enter
-3. View simulated stock data and predictions (placeholder for now)
+5. **Start the backend server**:
+   ```bash
+   py app.py
+   ```
+
+6. **Access the API**:
+   - Backend API: `http://localhost:5000`
+   - Health Check: `http://localhost:5000/api/health`
+
+## 🎯 API Usage
+
+### Stock Data Endpoints
+
+#### Get Real-time Stock Price
+```bash
+GET /api/stock/price/{symbol}
+curl http://localhost:5000/api/stock/price/AAPL
+```
+
+#### Get Detailed Stock Data
+```bash
+GET /api/stock/{symbol}
+curl http://localhost:5000/api/stock/AAPL
+```
+
+#### Search Stocks
+```bash
+GET /api/search?q={query}
+curl http://localhost:5000/api/search?q=AAPL
+```
+
+### ML Prediction Endpoints
+
+#### Get Stock Prediction
+```bash
+GET /api/predict/{symbol}
+curl http://localhost:5000/api/predict/AAPL
+```
+
+#### Train ML Models
+```bash
+POST /api/models/train/{symbol}
+curl -X POST http://localhost:5000/api/models/train/AAPL
+```
+
+#### Get Model Status
+```bash
+GET /api/models/status
+curl http://localhost:5000/api/models/status
+```
 
 ### Portfolio Management
-1. Go to the Portfolio section
-2. Enter stock symbol, number of shares, and purchase price
-3. Click "Add Stock" to add to your portfolio
-4. View your portfolio with total value calculation
-5. Remove stocks using the trash icon
 
-### Navigation
-- Use the navigation menu to jump between sections
-- Mobile-friendly hamburger menu for smaller screens
-- Smooth scrolling between sections
+#### Analyze Portfolio
+```bash
+POST /api/portfolio/analyze
+curl -X POST http://localhost:5000/api/portfolio/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"portfolio": [{"symbol": "AAPL", "shares": 10, "costBasis": 15000}]}'
+```
 
-## 🎨 Design Features
+## 🧪 Testing
 
-- **Modern UI/UX**: Clean, professional design with gradient backgrounds
-- **Responsive Layout**: Works perfectly on desktop, tablet, and mobile
-- **Interactive Elements**: Hover effects, smooth transitions, and animations
-- **Color Scheme**: Professional blue-purple gradients with gold accents
-- **Typography**: Clean, readable Inter font family
-- **Card-based Design**: Modern card layouts for content organization
+### Running Tests
 
-## 🔧 Customization
+#### Test Alpha Vantage Integration
+```bash
+py test_alpha_vantage.py
+```
 
-### Colors
-The main color scheme can be modified in `css/styles.css`:
-- Primary gradient: `#667eea` to `#764ba2`
-- Accent color: `#ffd700` (gold)
-- Background: `#f8fafc`
-- Text: `#2d3748`
+#### Test API Endpoints
+```bash
+py test_api.py
+```
 
-### Styling
-- All styles are in `css/styles.css`
-- Responsive breakpoints at 768px and 480px
-- CSS Grid and Flexbox for modern layouts
-- CSS Variables for easy customization
+#### Test ML Models
+```bash
+py test_ml_refactor.py
+```
 
-## 📱 Browser Support
+### Test Coverage
+- **API Integration**: Alpha Vantage connectivity and error handling
+- **ML Models**: Ensemble and ARIMA model functionality
+- **Endpoints**: All REST API endpoints with various scenarios
+- **Error Handling**: Rate limiting, invalid symbols, network issues
 
-- ✅ Chrome 60+
-- ✅ Firefox 55+
-- ✅ Safari 12+
-- ✅ Edge 79+
-- ✅ Mobile browsers (iOS Safari, Chrome Mobile)
+## 🔧 Configuration
+
+### Environment Variables
+Create `backend/.env` file with:
+```env
+ALPHA_VANTAGE_API_KEY=your_api_key_here
+PORT=5000
+FLASK_ENV=development
+```
+
+### ML Model Configuration
+- **Ensemble Weights**: Linear Regression (30%), Random Forest (70%)
+- **ARIMA Order**: (1, 1, 1) - configurable in ml_models.py
+- **Feature Engineering**: 25+ technical indicators
+- **Training Threshold**: Minimum 100 data points for robust training
+
+## 📊 Performance
+
+### Caching Strategy
+- **Stock Data**: 5-minute cache to avoid API rate limits
+- **ML Models**: Trained models cached per symbol
+- **API Responses**: Smart caching for frequently accessed data
+
+### Rate Limiting
+- **Alpha Vantage**: 5 calls/minute (free tier)
+- **Backend**: 12-second delays between API calls
+- **Error Handling**: Graceful fallbacks when limits exceeded
 
 ## 🚧 Current Limitations
 
-Since this is Phase 1 (Basic Structure), the following features are simulated:
-- Stock data is randomly generated (not real-time)
-- Predictions are placeholder calculations
-- Charts are placeholder elements
-- No real API integration yet
+- **API Rate Limits**: Alpha Vantage free tier has daily/minute limits
+- **Data Availability**: Some symbols may not be available
+- **Model Training**: Requires sufficient historical data (100+ points)
+- **Real-time Updates**: No WebSocket integration yet
 
-## 🔮 Next Steps
+## 🔮 Future Enhancements
 
-The project is ready for Phase 2 (Frontend Development) and Phase 3 (Backend & API Integration). The next phases will include:
+### Planned Features
+1. **Database Integration**: PostgreSQL for data persistence
+2. **Advanced ML Models**: LSTM, GRU for time series
+3. **WebSocket Support**: Real-time price updates
+4. **User Authentication**: JWT-based user management
+5. **Caching Layer**: Redis for improved performance
 
-1. **Real API Integration**: Connect to stock data providers
-2. **Machine Learning Backend**: Python server with ML models
-3. **Interactive Charts**: Real-time price charts
-4. **Advanced Analytics**: Technical indicators and predictions
-5. **User Authentication**: User accounts and data persistence
+### Performance Improvements
+1. **Load Balancing**: Multiple backend instances
+2. **Background Tasks**: Celery for ML model training
+3. **API Optimization**: GraphQL for efficient data fetching
+4. **Monitoring**: Application performance monitoring
 
 ## 🤝 Contributing
 
-This is a learning project, but suggestions and improvements are welcome! The code is well-commented and structured for easy understanding and modification.
+We welcome contributions to improve the backend! Please follow these guidelines:
+
+### Development Guidelines
+- Follow **PEP 8** for Python code style
+- Write comprehensive **docstrings** for all functions
+- Add **tests** for new features
+- Update **documentation** for API changes
+- Use **conventional commit messages**
+
+### Code Structure
+- **Modular Design**: Separate concerns (models, services, API)
+- **Error Handling**: Comprehensive exception handling
+- **Type Hints**: Use Python type annotations
+- **Documentation**: Clear docstrings and comments
 
 ## 📄 License
 
-This project is created for educational purposes. Feel free to use and modify as needed.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 📞 Support
 
-For questions or issues:
-- Check the code comments for implementation details
-- Review the `PROJECT_TODO.md` for development roadmap
-- The code is structured to be self-explanatory
+For backend-related issues:
+- Check the [API Documentation](#-api-usage) above
+- Review the [ML Refactor Summary](../../ML_REFACTOR_SUMMARY.md)
+- Check existing GitHub issues
+- Create a new issue with detailed error information
+
+## 🔗 Related Documentation
+
+- [Frontend Documentation](../Frontend-README.md)
+- [Alpha Vantage Setup](../../ALPHA_VANTAGE_SETUP.md)
+- [ML Implementation Details](../../ML_REFACTOR_SUMMARY.md)
+- [Quick Start Guide](../../QUICK_START.md)
 
 ---
 
