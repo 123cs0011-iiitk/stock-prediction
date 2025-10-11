@@ -294,4 +294,16 @@ This roadmap outlines the development phases for our stock price prediction syst
 
 ---
 
+## 🔗 Project Repository Information
+
+**GitHub Repository:** [https://github.com/123cs0011-iiitk/stock-prediction](https://github.com/123cs0011-iiitk/stock-prediction)
+
+**Project Lead GitHub:** [https://github.com/123cs0011-iiitk](https://github.com/123cs0011-iiitk)
+
+**Repository Structure:**
+- All development work should be tracked in the main repository
+- Feature branches should be created from the main repository
+- Pull requests should be submitted to the main repository for review
+- Issues and project tracking should be done in the main repository
+
 **Note:** This roadmap is a living document and will be updated based on project progress, user feedback, and technical discoveries. Regular review meetings will be held to assess progress and adjust timelines as needed.

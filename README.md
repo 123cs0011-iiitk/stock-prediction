@@ -81,6 +81,8 @@ stock-prediction/
    git clone https://github.com/123cs0011-iiitk/stock-prediction.git
    cd stock-prediction
    ```
+   
+   **Repository URL:** [https://github.com/123cs0011-iiitk/stock-prediction](https://github.com/123cs0011-iiitk/stock-prediction)
 
 2. **Create virtual environment**
    ```bash
@@ -127,11 +129,19 @@ For coverage report:
 python -m pytest tests/ --cov=src
 ```
 
+## 🔗 Project Repository
+
+**GitHub Repository:** [https://github.com/123cs0011-iiitk/stock-prediction](https://github.com/123cs0011-iiitk/stock-prediction)
+
+**Project Lead GitHub:** [https://github.com/123cs0011-iiitk](https://github.com/123cs0011-iiitk)
+
+📋 **For detailed repository information, contributing guidelines, and development workflow, see:** [`documentation/GitHub-Repository.md`](documentation/GitHub-Repository.md)
+
 ## 👥 Contributors
 
 | Name | Role | GitHub |
 |------|------|--------|
-| **Ankit Kumar** | Project Lead & ML Engineer | 123cs0011-iiitk |
+| **Ankit Kumar** | Project Lead & ML Engineer | [123cs0011-iiitk](https://github.com/123cs0011-iiitk) |
 | **Utkarsh Chaudhary** | Backend Developer | utkarsh |
 | **Debapriya Sarkar** | Frontend Developer & Data Analyst | debapriya |
 
@@ -139,11 +149,20 @@ python -m pytest tests/ --cov=src
 
 We welcome contributions from the community! Please follow these steps:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. **Fork the repository** from [https://github.com/123cs0011-iiitk/stock-prediction](https://github.com/123cs0011-iiitk/stock-prediction)
+2. **Clone your fork** locally:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/stock-prediction.git
+   cd stock-prediction
+   ```
+3. **Create a feature branch** (`git checkout -b feature/AmazingFeature`)
+4. **Make your changes** and commit them (`git commit -m 'Add some AmazingFeature'`)
+5. **Push to your fork** (`git push origin feature/AmazingFeature`)
+6. **Open a Pull Request** to the main repository
+
+**Repository Information:**
+- **Main Repository:** [https://github.com/123cs0011-iiitk/stock-prediction](https://github.com/123cs0011-iiitk/stock-prediction)
+- **Project Lead:** [Ankit Kumar (@123cs0011-iiitk)](https://github.com/123cs0011-iiitk)
 
 Please read CONTRIBUTING.md for details on our code of conduct and development process.
 

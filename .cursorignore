@@ -1,0 +1,19 @@
+# Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+# Never commit or mention AI-related files or logs
+CURSOR_INSTRUCTIONS.md
+CURSOR_SESSION.md
+.cursorignore
+
+# Ignore temporary instructions, cache, and editor metadata
+*.cursor
+*.log
+.DS_Store
+Thumbs.db
+
+# Ignore virtual environment
+.venv/
+__pycache__/
+
+# Ignore system and IDE files
+.vscode/
+.idea/
