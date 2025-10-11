@@ -25,10 +25,10 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 app.use(compression());
 
-// CORS configuration
+// CORS configuration - no authentication needed
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true
+  credentials: false
 }));
 
 // Rate limiting
