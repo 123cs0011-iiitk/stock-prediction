@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 # Removed random import - no longer needed without mock data
 from models.ml_models import EnsembleStockPredictor, ARIMATimeSeriesPredictor
 from services.alpha_vantage import alpha_vantage
+from services.multi_source_data_manager import multi_source_data_manager
+from services.postgresql_database import postgres_db
 
 # Load environment variables
 load_dotenv()
@@ -16,7 +18,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# Cache for stock data to avoid repeated API calls
+# Cache for stock data to avoid repeated API calls (legacy - now using database)
 stock_cache = {}
 cache_duration = 300  # 5 minutes
 
@@ -73,117 +75,47 @@ def health_check():
 
 @app.route('/api/search', methods=['GET'])
 def search_stocks():
-    """Search for stocks by symbol - uses live price endpoint"""
-    query = request.args.get('q', '').strip().upper()
+    """Search for stocks using intelligent data manager"""
+    query = request.args.get('q', '').strip()
     
     if not query:
         return jsonify({'error': 'Query parameter required'}), 400
     
     try:
-        # Get live stock price data
-        quote_data = alpha_vantage.get_global_quote(query)
+        # Use multi-source data manager for search
+        results = multi_source_data_manager.search_stocks(query)
         
-        # Try to get company overview for additional info
-        try:
-            company_data = alpha_vantage.get_company_overview(query)
-            company_name = company_data.get('name', f'{query} Corporation')
-        except:
-            company_name = f'{query} Corporation'
+        if not results:
+            return jsonify({
+                'error': f'No stocks found for query "{query}"'
+            }), 404
         
-        result = {
-            'symbol': quote_data['symbol'],
-            'name': company_name,
-            'price': quote_data['price'],
-            'change': quote_data['change'],
-            'changePercent': float(quote_data['change_percent']),
-            'volume': quote_data['volume'],
-            'currency': 'USD'
-        }
-        
-        return jsonify(result)
+        return jsonify(results)
     
     except Exception as e:
-        error_msg = str(e)
-        if 'Rate limit' in error_msg or 'API limit' in error_msg:
-            return jsonify({
-                'error': 'API rate limit exceeded. Please try again in a few minutes.',
-                'details': error_msg
-            }), 429
-        elif 'No data found' in error_msg or 'No price data' in error_msg:
-            return jsonify({
-                'error': f'Stock symbol "{query}" not found or no data available'
-            }), 404
-        else:
-            return jsonify({'error': f'Error searching stock: {str(e)}'}), 500
+        return jsonify({'error': f'Error searching stocks: {str(e)}'}), 500
 
 @app.route('/api/stock/price/<symbol>', methods=['GET'])
 def get_live_stock_price(symbol):
-    """Get real-time stock price using Alpha Vantage API"""
+    """Get real-time stock price using Yahoo Finance with Alpha Vantage fallback"""
     symbol = symbol.upper().strip()
+    force_refresh = request.args.get('refresh', 'false').lower() == 'true'
     
     if not symbol:
         return jsonify({'error': 'Stock symbol is required'}), 400
     
     try:
-        # Get real-time quote from Alpha Vantage
-        quote_data = alpha_vantage.get_global_quote(symbol)
+        # Use multi-source data manager for intelligent data fetching
+        quote_data = multi_source_data_manager.get_live_quote(symbol, force_refresh)
         
-        # Try to get company overview for additional info
-        try:
-            company_data = alpha_vantage.get_company_overview(symbol)
-            company_name = company_data.get('name', f'{symbol} Corporation')
-            market_cap = company_data.get('market_cap', 'N/A')
-            sector = company_data.get('sector', 'N/A')
-            industry = company_data.get('industry', 'N/A')
-        except:
-            # Fallback to default values if company overview fails
-            company_name = f'{symbol} Corporation'
-            market_cap = 'N/A'
-            sector = 'N/A'
-            industry = 'N/A'
-        
-        # Format response
-        response = {
-            'symbol': quote_data['symbol'],
-            'name': company_name,
-            'price': quote_data['price'],
-            'change': quote_data['change'],
-            'changePercent': float(quote_data['change_percent']),
-            'volume': quote_data['volume'],
-            'high': quote_data['high'],
-            'low': quote_data['low'],
-            'open': quote_data['open'],
-            'previousClose': quote_data['previous_close'],
-            'marketCap': market_cap,
-            'sector': sector,
-            'industry': industry,
-            'currency': 'USD',
-            'timestamp': quote_data['timestamp'],
-            'source': 'Alpha Vantage'
-        }
-        
-        return jsonify(response)
-        
-    except ValueError as e:
-        # Handle API errors (rate limits, invalid symbols, etc.)
-        error_msg = str(e)
-        if 'Rate limit' in error_msg or 'API limit' in error_msg:
-            return jsonify({
-                'error': 'API rate limit exceeded. Please try again in a few minutes.',
-                'details': error_msg,
-                'retry_after': 300  # 5 minutes
-            }), 429
-        elif 'No data found' in error_msg or 'No price data' in error_msg:
+        if not quote_data:
             return jsonify({
                 'error': f'Stock symbol "{symbol}" not found or no data available',
-                'details': error_msg
+                'details': 'Failed to fetch data from all sources'
             }), 404
-        else:
-            return jsonify({
-                'error': 'Failed to fetch stock data',
-                'details': error_msg
-            }), 500
-            
+        
+        return jsonify(quote_data)
+        
     except Exception as e:
         return jsonify({
             'error': 'Internal server error while fetching stock data',
@@ -192,92 +124,92 @@ def get_live_stock_price(symbol):
 
 @app.route('/api/stock/<symbol>', methods=['GET'])
 def get_stock_data(symbol):
-    """Get detailed stock data and historical prices from Alpha Vantage"""
+    """Get detailed stock data and historical prices with intelligent caching"""
     symbol = symbol.upper()
-    
-    # Check cache first
-    cached_data = get_cached_data(symbol)
-    if cached_data:
-        return jsonify(cached_data)
+    force_refresh = request.args.get('refresh', 'false').lower() == 'true'
     
     try:
-        # Get live stock price data
-        quote_data = alpha_vantage.get_global_quote(symbol)
+        # Get comprehensive stock data using multi-source data manager
+        comprehensive_data = multi_source_data_manager.get_comprehensive_stock_data(symbol, force_refresh)
         
-        # Try to get company overview
-        try:
-            company_data = alpha_vantage.get_company_overview(symbol)
-            company_name = company_data.get('name', f'{symbol} Corporation')
-            market_cap = company_data.get('market_cap', 'N/A')
-            sector = company_data.get('sector', 'N/A')
-            industry = company_data.get('industry', 'N/A')
-        except:
-            company_name = f'{symbol} Corporation'
-            market_cap = 'N/A'
-            sector = 'N/A'
-            industry = 'N/A'
+        if not comprehensive_data:
+            return jsonify({'error': 'Unable to fetch stock data'}), 500
         
-        # Get historical data
-        historical_data = get_historical_data_from_alpha_vantage(symbol)
-        
-        if not historical_data:
-            return jsonify({'error': 'Unable to fetch historical data'}), 500
+        quote_data = comprehensive_data['quote']
+        company_info = comprehensive_data['company_info']
+        historical_data = comprehensive_data['historical_data']
         
         # Calculate technical indicators from real data
-        prices = historical_data['prices']
-        if len(prices) > 1:
-            volatility = np.std(np.diff(prices) / prices[:-1]) * np.sqrt(252) * 100
-        else:
-            volatility = 20.0
-        
-        # Calculate moving averages
-        sma_20 = np.mean(prices[-20:]) if len(prices) >= 20 else prices[-1]
-        sma_50 = np.mean(prices[-50:]) if len(prices) >= 50 else prices[-1]
-        
-        # Calculate RSI (simplified)
-        if len(prices) >= 14:
-            price_changes = np.diff(prices[-14:])
-            gains = np.where(price_changes > 0, price_changes, 0)
-            losses = np.where(price_changes < 0, -price_changes, 0)
-            avg_gain = np.mean(gains)
-            avg_loss = np.mean(losses)
-            if avg_loss != 0:
-                rs = avg_gain / avg_loss
-                rsi = 100 - (100 / (1 + rs))
+        if historical_data and len(historical_data) > 0:
+            prices = [day['close'] for day in historical_data]
+            
+            if len(prices) > 1:
+                volatility = np.std(np.diff(prices) / np.array(prices[:-1])) * np.sqrt(252) * 100
             else:
-                rsi = 100
+                volatility = 20.0
+            
+            # Calculate moving averages
+            sma_20 = np.mean(prices[-20:]) if len(prices) >= 20 else prices[-1]
+            sma_50 = np.mean(prices[-50:]) if len(prices) >= 50 else prices[-1]
+            
+            # Calculate RSI (simplified)
+            if len(prices) >= 14:
+                price_changes = np.diff(prices[-14:])
+                gains = np.where(price_changes > 0, price_changes, 0)
+                losses = np.where(price_changes < 0, -price_changes, 0)
+                avg_gain = np.mean(gains)
+                avg_loss = np.mean(losses)
+                if avg_loss != 0:
+                    rs = avg_gain / avg_loss
+                    rsi = 100 - (100 / (1 + rs))
+                else:
+                    rsi = 100
+            else:
+                rsi = 50
         else:
+            # Fallback values if no historical data
+            volatility = 20.0
+            sma_20 = quote_data['price']
+            sma_50 = quote_data['price']
             rsi = 50
         
         # Prepare stock info
         stock_info = {
-            'name': company_name,
+            'name': company_info.get('name', f'{symbol} Corporation') if company_info else f'{symbol} Corporation',
             'price': quote_data['price'],
             'change': quote_data['change'],
-            'changePercent': float(quote_data['change_percent']),
+            'changePercent': quote_data['changePercent'],
             'volume': quote_data['volume'],
-            'marketCap': market_cap,
-            'currency': 'USD',
-            'sector': sector,
-            'industry': industry
+            'marketCap': company_info.get('market_cap', 'N/A') if company_info else 'N/A',
+            'currency': quote_data['currency'],
+            'sector': company_info.get('sector', 'N/A') if company_info else 'N/A',
+            'industry': company_info.get('industry', 'N/A') if company_info else 'N/A'
+        }
+        
+        # Format historical data for frontend
+        formatted_historical = {
+            'dates': [day['date'] for day in historical_data] if historical_data else [],
+            'prices': [day['close'] for day in historical_data] if historical_data else [],
+            'volumes': [day['volume'] for day in historical_data] if historical_data else [],
+            'opens': [day['open'] for day in historical_data] if historical_data else [],
+            'highs': [day['high'] for day in historical_data] if historical_data else [],
+            'lows': [day['low'] for day in historical_data] if historical_data else []
         }
         
         # Prepare data for frontend
         stock_data = {
             'symbol': symbol,
             'info': stock_info,
-            'historical': historical_data,
+            'historical': formatted_historical,
             'technical': {
                 'sma_20': round(sma_20, 2),
                 'sma_50': round(sma_50, 2),
                 'rsi': round(rsi, 1),
                 'volatility': round(volatility, 1)
             },
-            'source': 'Alpha Vantage'
+            'data_sources': comprehensive_data['data_sources'],
+            'source': 'Data Manager (Yahoo Finance + Alpha Vantage)'
         }
-        
-        # Cache the data
-        set_cached_data(symbol, stock_data)
         
         return jsonify(stock_data)
     
@@ -527,6 +459,54 @@ def analyze_portfolio():
     
     except Exception as e:
         return jsonify({'error': f'Error analyzing portfolio: {str(e)}'}), 500
+
+@app.route('/api/data/stats', methods=['GET'])
+def get_data_statistics():
+    """Get comprehensive data statistics and database information"""
+    try:
+        stats = multi_source_data_manager.get_data_statistics()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': f'Error getting data statistics: {str(e)}'}), 500
+
+@app.route('/api/data/cleanup', methods=['POST'])
+def cleanup_old_data():
+    """Clean up old data from database"""
+    try:
+        multi_source_data_manager.cleanup_old_data()
+        return jsonify({'message': 'Database cleanup completed successfully'})
+    except Exception as e:
+        return jsonify({'error': f'Error during cleanup: {str(e)}'}), 500
+
+@app.route('/api/health', methods=['GET'])
+def comprehensive_health_check():
+    """Comprehensive health check for all services"""
+    try:
+        health = multi_source_data_manager.health_check()
+        status_code = 200 if health['overall_status'] == 'healthy' else 503
+        return jsonify(health), status_code
+    except Exception as e:
+        return jsonify({'error': f'Health check failed: {str(e)}'}), 500
+
+@app.route('/api/news/<symbol>', methods=['GET'])
+def get_stock_news(symbol):
+    """Get news data for a stock from multiple sources"""
+    symbol = symbol.upper().strip()
+    limit = int(request.args.get('limit', 10))
+    
+    if not symbol:
+        return jsonify({'error': 'Stock symbol is required'}), 400
+    
+    try:
+        news_data = multi_source_data_manager.get_news_data(symbol, limit)
+        return jsonify({
+            'symbol': symbol,
+            'news': news_data,
+            'count': len(news_data),
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({'error': f'Error fetching news: {str(e)}'}), 500
 
 @app.route('/api/models/status', methods=['GET'])
 def get_models_status():

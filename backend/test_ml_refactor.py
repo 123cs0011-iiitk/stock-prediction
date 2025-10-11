@@ -229,7 +229,7 @@ def test_backend_endpoints():
 
 def main():
     """Main test runner"""
-    print("🚀 ML Implementation Refactor Test Suite")
+    print("ML Implementation Refactor Test Suite")
     print("=" * 60)
     
     # Test ML models
