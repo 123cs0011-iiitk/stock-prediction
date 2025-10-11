@@ -52,7 +52,7 @@ export interface PredictionResult {
   };
 }
 
-// Base URL for API calls - using Next.js API routes that proxy to backend
+// Base URL for API calls - using Next.js API routes that proxy to Express.js backend
 const BASE_URL = '/api/backend';
 
 // API call helper with error handling
