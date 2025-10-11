@@ -18,6 +18,9 @@ scipy==1.11.4
 scikit-learn==1.3.2
 statsmodels==0.14.0
 
+# Additional ML libraries for implemented algorithms
+# Note: TensorFlow is optional - algorithms will fall back to sklearn if not available
+
 # Database and ORM
 sqlalchemy==2.0.23
 alembic==1.13.1
