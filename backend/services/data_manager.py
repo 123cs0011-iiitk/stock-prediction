@@ -7,7 +7,8 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from services.yahoo_finance import yahoo_finance
 from services.alpha_vantage import alpha_vantage
-from services.database import stock_db
+from services.postgresql_database import postgres_db
+from services.csv_backup_service import csv_backup
 import logging
 
 # Set up logging
@@ -25,17 +26,29 @@ class DataManager:
     def get_live_quote(self, symbol: str, force_refresh: bool = False) -> Optional[Dict]:
         """
         Get live stock quote with intelligent caching and fallback
-        Priority: Database cache -> Yahoo Finance -> Alpha Vantage
+        Priority: PostgreSQL cache -> CSV backup cache -> Yahoo Finance -> Alpha Vantage
         """
         try:
             symbol = symbol.upper()
             
-            # Check database cache first (unless force refresh)
+            # Check PostgreSQL cache first (unless force refresh)
             if not force_refresh:
-                cached_quote = stock_db.get_latest_quote(symbol, self.cache_duration_minutes)
-                if cached_quote:
-                    logger.info(f"Using cached quote for {symbol}")
-                    return self._format_quote_response(cached_quote)
+                try:
+                    cached_quote = postgres_db.get_latest_quote(symbol, self.cache_duration_minutes)
+                    if cached_quote:
+                        logger.info(f"Using PostgreSQL cached quote for {symbol}")
+                        return self._format_quote_response(cached_quote)
+                except Exception as e:
+                    logger.warning(f"PostgreSQL cache check failed for {symbol}: {e}")
+                
+                # Fallback to CSV backup cache
+                try:
+                    cached_quote = csv_backup.get_latest_quote(symbol, self.cache_duration_minutes)
+                    if cached_quote:
+                        logger.info(f"Using CSV backup cached quote for {symbol}")
+                        return self._format_quote_response(cached_quote)
+                except Exception as e:
+                    logger.warning(f"CSV backup cache check failed for {symbol}: {e}")
             
             # Try Yahoo Finance first
             try:
@@ -43,8 +56,19 @@ class DataManager:
                 yahoo_quote = yahoo_finance.get_live_quote(symbol)
                 
                 if yahoo_quote:
-                    # Store in database
-                    stock_db.store_stock_quote(symbol, yahoo_quote, 'yahoo')
+                    # Store in both PostgreSQL and CSV backup
+                    try:
+                        postgres_db.store_stock_quote(symbol, yahoo_quote, 'yahoo')
+                        logger.info(f"Stored quote for {symbol} in PostgreSQL")
+                    except Exception as e:
+                        logger.warning(f"Failed to store quote for {symbol} in PostgreSQL: {e}")
+                    
+                    try:
+                        csv_backup.store_stock_quote(symbol, yahoo_quote, 'yahoo')
+                        logger.info(f"Stored quote for {symbol} in CSV backup")
+                    except Exception as e:
+                        logger.warning(f"Failed to store quote for {symbol} in CSV backup: {e}")
+                    
                     logger.info(f"Successfully fetched and stored quote for {symbol} from Yahoo Finance")
                     return self._format_quote_response(yahoo_quote)
                     
@@ -57,8 +81,19 @@ class DataManager:
                 alpha_quote = alpha_vantage.get_global_quote(symbol)
                 
                 if alpha_quote:
-                    # Store in database
-                    stock_db.store_stock_quote(symbol, alpha_quote, 'alpha_vantage')
+                    # Store in both PostgreSQL and CSV backup
+                    try:
+                        postgres_db.store_stock_quote(symbol, alpha_quote, 'alpha_vantage')
+                        logger.info(f"Stored quote for {symbol} in PostgreSQL")
+                    except Exception as e:
+                        logger.warning(f"Failed to store quote for {symbol} in PostgreSQL: {e}")
+                    
+                    try:
+                        csv_backup.store_stock_quote(symbol, alpha_quote, 'alpha_vantage')
+                        logger.info(f"Stored quote for {symbol} in CSV backup")
+                    except Exception as e:
+                        logger.warning(f"Failed to store quote for {symbol} in CSV backup: {e}")
+                    
                     logger.info(f"Successfully fetched and stored quote for {symbol} from Alpha Vantage")
                     return self._format_quote_response(alpha_quote)
                     
@@ -67,10 +102,23 @@ class DataManager:
             
             # Return cached data if available (even if expired)
             if not force_refresh:
-                cached_quote = stock_db.get_latest_quote(symbol, 1440)  # 24 hours
-                if cached_quote:
-                    logger.info(f"Using expired cached quote for {symbol}")
-                    return self._format_quote_response(cached_quote)
+                # Try PostgreSQL first
+                try:
+                    cached_quote = postgres_db.get_latest_quote(symbol, 1440)  # 24 hours
+                    if cached_quote:
+                        logger.info(f"Using expired PostgreSQL cached quote for {symbol}")
+                        return self._format_quote_response(cached_quote)
+                except Exception as e:
+                    logger.warning(f"PostgreSQL expired cache check failed for {symbol}: {e}")
+                
+                # Fallback to CSV backup
+                try:
+                    cached_quote = csv_backup.get_latest_quote(symbol, 1440)  # 24 hours
+                    if cached_quote:
+                        logger.info(f"Using expired CSV backup cached quote for {symbol}")
+                        return self._format_quote_response(cached_quote)
+                except Exception as e:
+                    logger.warning(f"CSV backup expired cache check failed for {symbol}: {e}")
             
             logger.error(f"Failed to fetch quote for {symbol} from all sources")
             return None
@@ -86,15 +134,27 @@ class DataManager:
         try:
             symbol = symbol.upper()
             
-            # Check database cache first
+            # Check PostgreSQL cache first
             if not force_refresh:
-                cached_info = stock_db.get_company_info(symbol)
-                if cached_info:
-                    # Check if data is fresh enough
-                    last_updated = datetime.fromisoformat(cached_info['last_updated'])
-                    if datetime.now() - last_updated < timedelta(days=self.company_info_cache_days):
-                        logger.info(f"Using cached company info for {symbol}")
+                try:
+                    cached_info = postgres_db.get_company_info(symbol)
+                    if cached_info:
+                        # Check if data is fresh enough
+                        last_updated = datetime.fromisoformat(cached_info['last_updated'])
+                        if datetime.now() - last_updated < timedelta(days=self.company_info_cache_days):
+                            logger.info(f"Using PostgreSQL cached company info for {symbol}")
+                            return cached_info
+                except Exception as e:
+                    logger.warning(f"PostgreSQL company info cache check failed for {symbol}: {e}")
+                
+                # Fallback to CSV backup cache
+                try:
+                    cached_info = csv_backup.get_company_info(symbol)
+                    if cached_info:
+                        logger.info(f"Using CSV backup cached company info for {symbol}")
                         return cached_info
+                except Exception as e:
+                    logger.warning(f"CSV backup company info cache check failed for {symbol}: {e}")
             
             # Try Yahoo Finance first
             try:
@@ -102,7 +162,19 @@ class DataManager:
                 yahoo_info = yahoo_finance.get_company_info(symbol)
                 
                 if yahoo_info:
-                    stock_db.store_company_info(symbol, yahoo_info, 'yahoo')
+                    # Store in both PostgreSQL and CSV backup
+                    try:
+                        postgres_db.store_company_info(symbol, yahoo_info, 'yahoo')
+                        logger.info(f"Stored company info for {symbol} in PostgreSQL")
+                    except Exception as e:
+                        logger.warning(f"Failed to store company info for {symbol} in PostgreSQL: {e}")
+                    
+                    try:
+                        csv_backup.store_company_info(symbol, yahoo_info, 'yahoo')
+                        logger.info(f"Stored company info for {symbol} in CSV backup")
+                    except Exception as e:
+                        logger.warning(f"Failed to store company info for {symbol} in CSV backup: {e}")
+                    
                     logger.info(f"Successfully fetched and stored company info for {symbol}")
                     return yahoo_info
                     
@@ -115,7 +187,19 @@ class DataManager:
                 alpha_info = alpha_vantage.get_company_overview(symbol)
                 
                 if alpha_info:
-                    stock_db.store_company_info(symbol, alpha_info, 'alpha_vantage')
+                    # Store in both PostgreSQL and CSV backup
+                    try:
+                        postgres_db.store_company_info(symbol, alpha_info, 'alpha_vantage')
+                        logger.info(f"Stored company info for {symbol} in PostgreSQL")
+                    except Exception as e:
+                        logger.warning(f"Failed to store company info for {symbol} in PostgreSQL: {e}")
+                    
+                    try:
+                        csv_backup.store_company_info(symbol, alpha_info, 'alpha_vantage')
+                        logger.info(f"Stored company info for {symbol} in CSV backup")
+                    except Exception as e:
+                        logger.warning(f"Failed to store company info for {symbol} in CSV backup: {e}")
+                    
                     logger.info(f"Successfully fetched and stored company info for {symbol}")
                     return alpha_info
                     
@@ -124,10 +208,23 @@ class DataManager:
             
             # Return cached data if available
             if not force_refresh:
-                cached_info = stock_db.get_company_info(symbol)
-                if cached_info:
-                    logger.info(f"Using cached company info for {symbol}")
-                    return cached_info
+                # Try PostgreSQL first
+                try:
+                    cached_info = postgres_db.get_company_info(symbol)
+                    if cached_info:
+                        logger.info(f"Using cached PostgreSQL company info for {symbol}")
+                        return cached_info
+                except Exception as e:
+                    logger.warning(f"PostgreSQL cached company info check failed for {symbol}: {e}")
+                
+                # Fallback to CSV backup
+                try:
+                    cached_info = csv_backup.get_company_info(symbol)
+                    if cached_info:
+                        logger.info(f"Using cached CSV backup company info for {symbol}")
+                        return cached_info
+                except Exception as e:
+                    logger.warning(f"CSV backup cached company info check failed for {symbol}: {e}")
             
             logger.error(f"Failed to fetch company info for {symbol} from all sources")
             return None
@@ -143,16 +240,30 @@ class DataManager:
         try:
             symbol = symbol.upper()
             
-            # Check database cache first
+            # Check PostgreSQL cache first
             if not force_refresh:
-                cached_historical = stock_db.get_historical_data(symbol, 365)  # Get up to 1 year
-                if cached_historical:
-                    # Check if we have recent data
+                try:
+                    cached_historical = postgres_db.get_historical_data(symbol, 365)  # Get up to 1 year
                     if cached_historical:
+                        # Check if we have recent data
                         latest_date = datetime.strptime(cached_historical[0]['date'], '%Y-%m-%d')
                         if datetime.now() - latest_date < timedelta(days=self.historical_cache_days):
-                            logger.info(f"Using cached historical data for {symbol}")
+                            logger.info(f"Using PostgreSQL cached historical data for {symbol}")
                             return self._format_historical_response(cached_historical)
+                except Exception as e:
+                    logger.warning(f"PostgreSQL historical data cache check failed for {symbol}: {e}")
+                
+                # Fallback to CSV backup cache
+                try:
+                    cached_historical = csv_backup.get_historical_data(symbol, 365)  # Get up to 1 year
+                    if cached_historical:
+                        # Check if we have recent data
+                        latest_date = datetime.strptime(cached_historical[0]['date'], '%Y-%m-%d')
+                        if datetime.now() - latest_date < timedelta(days=self.historical_cache_days):
+                            logger.info(f"Using CSV backup cached historical data for {symbol}")
+                            return self._format_historical_response(cached_historical)
+                except Exception as e:
+                    logger.warning(f"CSV backup historical data cache check failed for {symbol}: {e}")
             
             # Try Yahoo Finance first
             try:
@@ -160,7 +271,19 @@ class DataManager:
                 yahoo_historical = yahoo_finance.get_historical_data(symbol, period)
                 
                 if yahoo_historical:
-                    stock_db.store_historical_data(symbol, yahoo_historical, 'yahoo')
+                    # Store in both PostgreSQL and CSV backup
+                    try:
+                        postgres_db.store_historical_data(symbol, yahoo_historical, 'yahoo')
+                        logger.info(f"Stored historical data for {symbol} in PostgreSQL")
+                    except Exception as e:
+                        logger.warning(f"Failed to store historical data for {symbol} in PostgreSQL: {e}")
+                    
+                    try:
+                        csv_backup.store_historical_data(symbol, yahoo_historical, 'yahoo')
+                        logger.info(f"Stored historical data for {symbol} in CSV backup")
+                    except Exception as e:
+                        logger.warning(f"Failed to store historical data for {symbol} in CSV backup: {e}")
+                    
                     logger.info(f"Successfully fetched and stored historical data for {symbol}")
                     return self._format_historical_response(yahoo_historical)
                     
@@ -174,7 +297,20 @@ class DataManager:
                 
                 if alpha_historical and 'historical_data' in alpha_historical:
                     historical_list = alpha_historical['historical_data']
-                    stock_db.store_historical_data(symbol, historical_list, 'alpha_vantage')
+                    
+                    # Store in both PostgreSQL and CSV backup
+                    try:
+                        postgres_db.store_historical_data(symbol, historical_list, 'alpha_vantage')
+                        logger.info(f"Stored historical data for {symbol} in PostgreSQL")
+                    except Exception as e:
+                        logger.warning(f"Failed to store historical data for {symbol} in PostgreSQL: {e}")
+                    
+                    try:
+                        csv_backup.store_historical_data(symbol, historical_list, 'alpha_vantage')
+                        logger.info(f"Stored historical data for {symbol} in CSV backup")
+                    except Exception as e:
+                        logger.warning(f"Failed to store historical data for {symbol} in CSV backup: {e}")
+                    
                     logger.info(f"Successfully fetched and stored historical data for {symbol}")
                     return self._format_historical_response(historical_list)
                     
@@ -183,10 +319,23 @@ class DataManager:
             
             # Return cached data if available
             if not force_refresh:
-                cached_historical = stock_db.get_historical_data(symbol, 365)
-                if cached_historical:
-                    logger.info(f"Using cached historical data for {symbol}")
-                    return self._format_historical_response(cached_historical)
+                # Try PostgreSQL first
+                try:
+                    cached_historical = postgres_db.get_historical_data(symbol, 365)
+                    if cached_historical:
+                        logger.info(f"Using cached PostgreSQL historical data for {symbol}")
+                        return self._format_historical_response(cached_historical)
+                except Exception as e:
+                    logger.warning(f"PostgreSQL cached historical data check failed for {symbol}: {e}")
+                
+                # Fallback to CSV backup
+                try:
+                    cached_historical = csv_backup.get_historical_data(symbol, 365)
+                    if cached_historical:
+                        logger.info(f"Using cached CSV backup historical data for {symbol}")
+                        return self._format_historical_response(cached_historical)
+                except Exception as e:
+                    logger.warning(f"CSV backup cached historical data check failed for {symbol}: {e}")
             
             logger.error(f"Failed to fetch historical data for {symbol} from all sources")
             return None
@@ -209,7 +358,7 @@ class DataManager:
                 symbol = stock['symbol']
                 
                 # Try to get additional info from cache
-                cached_quote = stock_db.get_latest_quote(symbol, 60)  # 1 hour cache
+                cached_quote = postgres_db.get_latest_quote(symbol, 60)  # 1 hour cache
                 if cached_quote:
                     stock.update({
                         'price': cached_quote['price'],
@@ -290,7 +439,7 @@ class DataManager:
     def get_data_statistics(self) -> Dict:
         """Get statistics about data usage and storage"""
         try:
-            db_stats = stock_db.get_database_stats()
+            db_stats = postgres_db.get_database_stats()
             
             return {
                 'database_stats': db_stats,
@@ -314,7 +463,7 @@ class DataManager:
     def cleanup_old_data(self):
         """Clean up old data from database"""
         try:
-            stock_db.cleanup_old_data(days_to_keep=30)
+            postgres_db.cleanup_old_data(days_to_keep=30)
             logger.info("Database cleanup completed")
         except Exception as e:
             logger.error(f"Error during database cleanup: {e}")

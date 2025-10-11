@@ -29,6 +29,7 @@ The predictions are delivered through an intuitive React-based web interface wit
 - **Interactive Dashboard**: Modern React UI with real-time updates
 - **Portfolio Management**: Track and analyze investment portfolios
 - **Currency Support**: USD/INR conversion with live rates
+- **Dual Storage System**: PostgreSQL + CSV backup for data redundancy and reliability
 
 ### ML Algorithms
 - **Linear Regression**: Linear relationship modeling (30% weight)
@@ -41,6 +42,8 @@ The predictions are delivered through an intuitive React-based web interface wit
 - **Performance Metrics**: R² score, RMSE, MAE for each algorithm
 - **Confidence Scoring**: Prediction confidence based on model agreement
 - **Error Handling**: Comprehensive API rate limiting and fallback systems
+- **Dual Storage**: PostgreSQL + CSV backup system for data redundancy
+- **Intelligent Fallback**: Automatic fallback from PostgreSQL to CSV when needed
 - **Caching**: Smart caching for performance optimization
 
 ## 🛠️ Technology Stack
@@ -48,6 +51,7 @@ The predictions are delivered through an intuitive React-based web interface wit
 ### Backend
 - **Python 3.8+** - Core programming language
 - **Flask** - Web framework with CORS support
+- **PostgreSQL** - Primary database for data persistence and caching
 - **scikit-learn** - Machine learning library
 - **pandas** - Data manipulation and analysis
 - **numpy** - Numerical computing
@@ -92,6 +96,10 @@ stock-prediction/
 │   ├── package.json         # Node.js dependencies
 │   ├── vite.config.ts       # Vite configuration
 │   └── index.html           # HTML entry point
+├── backup/                    # CSV backup storage (root level)
+│   ├── quotes/              # Real-time stock quotes
+│   ├── historical/          # Historical price data
+│   └── companies/           # Company information
 ├── documentation/            # Project documentation
 │   ├── Backend-README.md    # Backend documentation
 │   ├── Frontend-README.md   # Frontend documentation
@@ -100,6 +108,8 @@ stock-prediction/
 ├── README.md                 # Main project documentation
 ├── QUICK_START.md           # Quick start guide
 ├── ALPHA_VANTAGE_SETUP.md   # API setup instructions
+├── POSTGRESQL_SETUP.md      # PostgreSQL setup guide
+├── CSV_BACKUP_SYSTEM.md     # CSV backup system documentation
 ├── ML_REFACTOR_SUMMARY.md   # ML implementation details
 └── LICENSE                   # MIT License
 ```
@@ -110,6 +120,7 @@ stock-prediction/
 - **Python 3.8+** - For backend development
 - **Node.js 16+** - For frontend development
 - **Git** - Version control
+- **PostgreSQL** - Database server (see [POSTGRESQL_SETUP.md](POSTGRESQL_SETUP.md) for detailed setup)
 - **Alpha Vantage API Key** - Free account at [alphavantage.co](https://www.alphavantage.co/support/#api-key)
 
 ### Quick Setup
@@ -134,7 +145,10 @@ stock-prediction/
    
    # Setup environment variables
    cp env.example .env
-   # Edit .env and add your ALPHA_VANTAGE_API_KEY
+   # Edit .env and add your ALPHA_VANTAGE_API_KEY and PostgreSQL configuration
+   
+   # IMPORTANT: Set up PostgreSQL first (see POSTGRESQL_SETUP.md)
+   # Configure database connection in .env file
    
    # Start backend server
    py app.py

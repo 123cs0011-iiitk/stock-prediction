@@ -9,7 +9,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from services.yahoo_finance import yahoo_finance
-from services.database import stock_db
+from services.postgresql_database import postgres_db
 from services.data_manager import data_manager
 import json
 from datetime import datetime
@@ -81,12 +81,12 @@ def test_database_functionality():
         quote = yahoo_finance.get_live_quote(test_symbol)
         if quote:
             # Store in database
-            success = stock_db.store_stock_quote(test_symbol, quote, 'yahoo')
+            success = postgres_db.store_stock_quote(test_symbol, quote, 'yahoo')
             if success:
                 print("[SUCCESS] Successfully stored quote in database")
                 
                 # Retrieve from database
-                cached_quote = stock_db.get_latest_quote(test_symbol, 60)
+                cached_quote = postgres_db.get_latest_quote(test_symbol, 60)
                 if cached_quote:
                     print("[SUCCESS] Successfully retrieved quote from database")
                     print(f"   Cached price: ${cached_quote['price']}")
@@ -102,7 +102,7 @@ def test_database_functionality():
     # Test database stats
     print(f"\n2. Testing database statistics...")
     try:
-        stats = stock_db.get_database_stats()
+        stats = postgres_db.get_database_stats()
         print("[SUCCESS] Database statistics:")
         print(f"   Quotes count: {stats.get('quotes_count', 0)}")
         print(f"   Historical count: {stats.get('historical_count', 0)}")

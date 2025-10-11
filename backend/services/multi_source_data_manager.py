@@ -15,6 +15,7 @@ from services.finnhub_api import finnhub_api
 from services.polygon_api import polygon_api
 from services.alpha_vantage import alpha_vantage
 from services.postgresql_database import postgres_db
+from services.csv_backup_service import csv_backup
 
 # Load environment variables
 load_dotenv()
@@ -78,12 +79,24 @@ class MultiSourceDataManager:
         try:
             symbol = symbol.upper()
             
-            # Check database cache first (unless force refresh)
+            # Check PostgreSQL cache first (unless force refresh)
             if not force_refresh:
-                cached_quote = postgres_db.get_latest_quote(symbol, self.cache_duration_minutes)
-                if cached_quote:
-                    logger.info(f"Using cached quote for {symbol}")
-                    return self._format_quote_response(cached_quote)
+                try:
+                    cached_quote = postgres_db.get_latest_quote(symbol, self.cache_duration_minutes)
+                    if cached_quote:
+                        logger.info(f"Using PostgreSQL cached quote for {symbol}")
+                        return self._format_quote_response(cached_quote)
+                except Exception as e:
+                    logger.warning(f"PostgreSQL cache check failed for {symbol}: {e}")
+                
+                # Fallback to CSV backup cache
+                try:
+                    cached_quote = csv_backup.get_latest_quote(symbol, self.cache_duration_minutes)
+                    if cached_quote:
+                        logger.info(f"Using CSV backup cached quote for {symbol}")
+                        return self._format_quote_response(cached_quote)
+                except Exception as e:
+                    logger.warning(f"CSV backup cache check failed for {symbol}: {e}")
             
             # Try each data source in priority order
             for source in self.data_sources:
@@ -107,8 +120,19 @@ class MultiSourceDataManager:
                         continue
                     
                     if quote:
-                        # Store in database
-                        postgres_db.store_stock_quote(symbol, quote, source)
+                        # Store in both PostgreSQL and CSV backup
+                        try:
+                            postgres_db.store_stock_quote(symbol, quote, source)
+                            logger.info(f"Stored quote for {symbol} in PostgreSQL")
+                        except Exception as e:
+                            logger.warning(f"Failed to store quote for {symbol} in PostgreSQL: {e}")
+                        
+                        try:
+                            csv_backup.store_stock_quote(symbol, quote, source)
+                            logger.info(f"Stored quote for {symbol} in CSV backup")
+                        except Exception as e:
+                            logger.warning(f"Failed to store quote for {symbol} in CSV backup: {e}")
+                        
                         logger.info(f"Successfully fetched and stored quote for {symbol} from {source}")
                         return self._format_quote_response(quote)
                         
@@ -119,10 +143,23 @@ class MultiSourceDataManager:
             
             # Return cached data if available (even if expired)
             if not force_refresh:
-                cached_quote = postgres_db.get_latest_quote(symbol, 1440)  # 24 hours
-                if cached_quote:
-                    logger.info(f"Using expired cached quote for {symbol}")
-                    return self._format_quote_response(cached_quote)
+                # Try PostgreSQL first
+                try:
+                    cached_quote = postgres_db.get_latest_quote(symbol, 1440)  # 24 hours
+                    if cached_quote:
+                        logger.info(f"Using expired PostgreSQL cached quote for {symbol}")
+                        return self._format_quote_response(cached_quote)
+                except Exception as e:
+                    logger.warning(f"PostgreSQL expired cache check failed for {symbol}: {e}")
+                
+                # Fallback to CSV backup
+                try:
+                    cached_quote = csv_backup.get_latest_quote(symbol, 1440)  # 24 hours
+                    if cached_quote:
+                        logger.info(f"Using expired CSV backup cached quote for {symbol}")
+                        return self._format_quote_response(cached_quote)
+                except Exception as e:
+                    logger.warning(f"CSV backup expired cache check failed for {symbol}: {e}")
             
             logger.error(f"Failed to fetch quote for {symbol} from all sources")
             return None
