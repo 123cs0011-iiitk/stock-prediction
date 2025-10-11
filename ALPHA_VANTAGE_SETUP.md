@@ -159,7 +159,7 @@ The system handles various error scenarios:
 ```bash
 # Test Alpha Vantage integration
 cd backend
-python test_alpha_vantage.py
+py test_alpha_vantage.py
 
 # Test specific endpoint
 curl http://localhost:5000/api/stock/price/AAPL
@@ -172,7 +172,7 @@ curl http://localhost:5000/api/stock/price/AAPL
 4. Run: `testLiveStockPrice()`
 
 ### Manual Testing
-1. Start backend: `python backend/app.py`
+1. Start backend: `py backend/app.py`
 2. Start frontend: `npm run start`
 3. Open http://localhost:3000
 4. Search for any stock symbol (e.g., AAPL, GOOGL, MSFT)
